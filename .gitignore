@@ -1,0 +1,29 @@
+# Maven
+backend/target/
+target/
+
+# Node.js
+frontend/node_modules/
+node_modules/
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.*
+
+# Java
+*.class
+
+# Build folders
+dist/
+build/
+
+# OS Files
+.DS_Store
+Thumbs.db
