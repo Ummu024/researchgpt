@@ -27,3 +27,12 @@ server:
 logging:
   level:
     com.researchgpt: DEBUG
+
+application:
+  security:
+    jwt:
+      # Base64-encoded HMAC-SHA256 key. Local-dev default only — override via
+      # the JWT_SECRET_KEY env var in staging/production, never commit a real secret.
+      secret-key: ${JWT_SECRET_KEY:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm}
+      # 24 hours, in milliseconds
+      expiration: ${JWT_EXPIRATION_MS:86400000}
