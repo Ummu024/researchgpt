@@ -36,3 +36,14 @@ application:
       secret-key: ${JWT_SECRET_KEY:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm}
       # 24 hours, in milliseconds
       expiration: ${JWT_EXPIRATION_MS:86400000}
+
+      spring:
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 25MB
+      max-request-size: 25MB
+
+app:
+  upload:
+    dir: uploads

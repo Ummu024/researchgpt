@@ -76,4 +76,35 @@ public class GlobalExceptionHandler {
         );
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
     }
+
+
+   @ExceptionHandler(InvalidFileException.class)
+public ResponseEntity<ErrorResponse> handleInvalidFile(InvalidFileException ex) {
+    ErrorResponse error = new ErrorResponse(
+            HttpStatus.BAD_REQUEST.value(),
+            "Invalid File",
+            ex.getMessage()
+    );
+    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+}
+
+@ExceptionHandler(PaperNotFoundException.class)
+public ResponseEntity<ErrorResponse> handlePaperNotFound(PaperNotFoundException ex) {
+    ErrorResponse error = new ErrorResponse(
+            HttpStatus.NOT_FOUND.value(),
+            "Paper Not Found",
+            ex.getMessage()
+    );
+    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+}
+
+@ExceptionHandler(FileStorageException.class)
+public ResponseEntity<ErrorResponse> handleFileStorage(FileStorageException ex) {
+    ErrorResponse error = new ErrorResponse(
+            HttpStatus.INTERNAL_SERVER_ERROR.value(),
+            "File Storage Error",
+            ex.getMessage()
+    );
+    return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+} 
 }
