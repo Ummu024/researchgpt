@@ -42,6 +42,10 @@ public class Paper {
     @Builder.Default
     private ProcessingStatus processingStatus = ProcessingStatus.PENDING;
 
+    
+    @Column(name = "extracted_text", columnDefinition = "TEXT")
+    private String extractedText;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id", nullable = false)
     private User owner;

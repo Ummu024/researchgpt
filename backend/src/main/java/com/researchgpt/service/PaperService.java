@@ -9,6 +9,9 @@ import com.researchgpt.exception.InvalidFileException;
 import com.researchgpt.exception.PaperNotFoundException;
 import com.researchgpt.repository.PaperRepository;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -73,7 +76,35 @@ public class PaperService {
 
         Paper saved = paperRepository.save(paper);
         log.info("Paper uploaded: id={}, owner={}", saved.getId(), owner.getEmail());
+
+        extractTextAndUpdateStatus(saved, targetPath);
+
         return toResponse(saved);
+    }
+
+    /**
+     * Extracts text from the stored PDF using Apache PDFBox and updates the
+     * paper's processingStatus accordingly (PENDING -> PROCESSING -> COMPLETED/FAILED).
+     * Runs synchronously as part of the upload request for Phase 5 Batch 1.
+     */
+    private void extractTextAndUpdateStatus(Paper paper, Path filePath) {
+        paper.setProcessingStatus(ProcessingStatus.PROCESSING);
+        paperRepository.save(paper);
+
+        try (PDDocument document = Loader.loadPDF(filePath.toFile())) {
+            PDFTextStripper stripper = new PDFTextStripper();
+            String text = stripper.getText(document);
+
+            paper.setExtractedText(text);
+            paper.setProcessingStatus(ProcessingStatus.COMPLETED);
+            log.info("Text extraction completed for paper id={}, characters={}",
+                    paper.getId(), text != null ? text.length() : 0);
+        } catch (IOException e) {
+            paper.setProcessingStatus(ProcessingStatus.FAILED);
+            log.error("Text extraction failed for paper id={}: {}", paper.getId(), e.getMessage());
+        }
+
+        paperRepository.save(paper);
     }
 
     public List<PaperResponse> listPapers(User owner) {
