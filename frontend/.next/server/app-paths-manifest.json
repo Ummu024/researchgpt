@@ -1,7 +1,5 @@
 {
-  "/(dashboard)/literature-review/page": "app/(dashboard)/literature-review/page.js",
-  "/(dashboard)/chat/page": "app/(dashboard)/chat/page.js",
-  "/(dashboard)/papers/page": "app/(dashboard)/papers/page.js",
-  "/(dashboard)/research-gap/page": "app/(dashboard)/research-gap/page.js",
-  "/(dashboard)/upload/page": "app/(dashboard)/upload/page.js"
+  "/_not-found/page": "app/_not-found/page.js",
+  "/(dashboard)/upload/page": "app/(dashboard)/upload/page.js",
+  "/(dashboard)/papers/page": "app/(dashboard)/papers/page.js"
 }

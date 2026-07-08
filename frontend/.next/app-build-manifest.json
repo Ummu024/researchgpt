@@ -20,25 +20,40 @@
       "static/chunks/main-app.js",
       "static/chunks/app/(dashboard)/papers/page.js"
     ],
-    "/(dashboard)/chat/page": [
+    "/(dashboard)/upload/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/(dashboard)/chat/page.js"
+      "static/chunks/app/(dashboard)/upload/page.js"
     ],
-    "/(dashboard)/literature-review/page": [
+    "/(auth)/login/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/(dashboard)/literature-review/page.js"
+      "static/chunks/app/(auth)/login/page.js"
+    ],
+    "/(dashboard)/dashboard/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/(dashboard)/dashboard/page.js"
     ],
     "/(dashboard)/research-gap/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/(dashboard)/research-gap/page.js"
     ],
-    "/(dashboard)/upload/page": [
+    "/(dashboard)/literature-review/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/(dashboard)/upload/page.js"
+      "static/chunks/app/(dashboard)/literature-review/page.js"
+    ],
+    "/(dashboard)/chat/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/(dashboard)/chat/page.js"
+    ],
+    "/_not-found/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/_not-found/page.js"
     ]
   }
 }

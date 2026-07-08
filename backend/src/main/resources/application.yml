@@ -21,6 +21,21 @@ spring:
       host: localhost
       port: 6379
 
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 25MB
+      max-request-size: 25MB
+
+  ai:
+    ollama:
+      base-url: http://localhost:11434
+      embedding:
+        options:
+          model: nomic-embed-text
+      init:
+        pull-model-strategy: when_missing
+
 server:
   port: 8080
 
@@ -31,18 +46,11 @@ logging:
 application:
   security:
     jwt:
-      # Base64-encoded HMAC-SHA256 key. Local-dev default only — override via
-      # the JWT_SECRET_KEY env var in staging/production, never commit a real secret.
+      # Base64-encoded HMAC-SHA256 key.
+      # Override via JWT_SECRET_KEY in production.
       secret-key: ${JWT_SECRET_KEY:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm}
-      # 24 hours, in milliseconds
+      # 24 hours
       expiration: ${JWT_EXPIRATION_MS:86400000}
-
-      spring:
-  servlet:
-    multipart:
-      enabled: true
-      max-file-size: 25MB
-      max-request-size: 25MB
 
 app:
   upload:

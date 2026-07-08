@@ -9,6 +9,7 @@ import com.researchgpt.entity.User;
 import com.researchgpt.exception.FileStorageException;
 import com.researchgpt.exception.InvalidFileException;
 import com.researchgpt.exception.PaperNotFoundException;
+import com.researchgpt.repository.ChunkEmbeddingRepository;
 import com.researchgpt.repository.PaperChunkRepository;
 import com.researchgpt.repository.PaperRepository;
 import com.researchgpt.util.TextChunkerUtil;
@@ -40,13 +41,19 @@ public class PaperService {
 
     private final PaperRepository paperRepository;
     private final PaperChunkRepository paperChunkRepository;
+    private final ChunkEmbeddingRepository chunkEmbeddingRepository;
+    private final EmbeddingService embeddingService;
     private final Path uploadDir;
 
     public PaperService(PaperRepository paperRepository,
                          PaperChunkRepository paperChunkRepository,
+                         ChunkEmbeddingRepository chunkEmbeddingRepository,
+                         EmbeddingService embeddingService,
                          @Value("${app.upload.dir:uploads}") String uploadDirPath) {
         this.paperRepository = paperRepository;
         this.paperChunkRepository = paperChunkRepository;
+        this.chunkEmbeddingRepository = chunkEmbeddingRepository;
+        this.embeddingService = embeddingService;
         this.uploadDir = Paths.get(uploadDirPath).toAbsolutePath().normalize();
         try {
             Files.createDirectories(this.uploadDir);
@@ -91,43 +98,52 @@ public class PaperService {
     }
 
     /**
-     * Extracts text from the stored PDF using Apache PDFBox and updates the
-     * paper's processingStatus accordingly (PENDING -> PROCESSING -> COMPLETED/FAILED).
-     * Runs synchronously as part of the upload request for Phase 5 Batch 1.
-     *
-     * Phase 5 Batch 2: on successful extraction, also triggers chunk generation.
+     * Extracts text from the stored PDF using Apache PDFBox, then chunks the
+     * extracted text and generates embeddings for each chunk via Ollama.
+     * <p>
+     * Status flow: PENDING -> PROCESSING -> COMPLETED (only after embeddings
+     * are successfully stored) or FAILED (if extraction, chunking, or
+     * embedding generation fails at any point).
      */
     private void extractTextAndUpdateStatus(Paper paper, Path filePath) {
         paper.setProcessingStatus(ProcessingStatus.PROCESSING);
         paperRepository.save(paper);
 
+        String extractedText;
         try (PDDocument document = Loader.loadPDF(filePath.toFile())) {
             PDFTextStripper stripper = new PDFTextStripper();
-            String text = stripper.getText(document);
+            extractedText = stripper.getText(document);
 
-            paper.setExtractedText(text);
-            paper.setProcessingStatus(ProcessingStatus.COMPLETED);
+            paper.setExtractedText(extractedText);
+            paperRepository.save(paper);
             log.info("Text extraction completed for paper id={}, characters={}",
-                    paper.getId(), text != null ? text.length() : 0);
+                    paper.getId(), extractedText != null ? extractedText.length() : 0);
         } catch (IOException e) {
             paper.setProcessingStatus(ProcessingStatus.FAILED);
+            paperRepository.save(paper);
             log.error("Text extraction failed for paper id={}: {}", paper.getId(), e.getMessage());
+            return;
         }
 
-        paperRepository.save(paper);
-
-        // Phase 5 Batch 2: only attempt chunking if extraction succeeded
-        if (paper.getProcessingStatus() == ProcessingStatus.COMPLETED) {
-            generateAndSaveChunks(paper);
+        // Phase 5 Batch 2: chunk the extracted text
+        List<PaperChunk> chunks = generateAndSaveChunks(paper);
+        if (chunks == null) {
+            // generateAndSaveChunks already set status to FAILED and saved
+            return;
         }
+
+        // Phase 5 Batch 3: generate + store embeddings for each chunk
+        generateAndSaveEmbeddings(paper, chunks);
     }
 
     /**
      * Phase 5 Batch 2: splits paper.extractedText into overlapping chunks
-     * and persists them as PaperChunk rows. On any failure (including no
-     * chunks produced), marks the paper as FAILED.
+     * and persists them as PaperChunk rows.
+     *
+     * @return the saved chunks, or {@code null} if chunking failed
+     *         (in which case the paper's status is already set to FAILED and saved)
      */
-    private void generateAndSaveChunks(Paper paper) {
+    private List<PaperChunk> generateAndSaveChunks(Paper paper) {
         try {
             List<String> chunkContents = TextChunkerUtil.chunkText(paper.getExtractedText());
 
@@ -135,7 +151,7 @@ public class PaperService {
                 log.warn("No chunks generated for paper id={}, no extracted text available", paper.getId());
                 paper.setProcessingStatus(ProcessingStatus.FAILED);
                 paperRepository.save(paper);
-                return;
+                return null;
             }
 
             List<PaperChunk> chunks = new ArrayList<>();
@@ -147,11 +163,31 @@ public class PaperService {
                         .build());
             }
 
-            paperChunkRepository.saveAll(chunks);
-            log.info("Saved {} chunks for paper id={}", chunks.size(), paper.getId());
+            List<PaperChunk> savedChunks = paperChunkRepository.saveAll(chunks);
+            log.info("Saved {} chunks for paper id={}", savedChunks.size(), paper.getId());
+            return savedChunks;
 
         } catch (Exception e) {
             log.error("Chunk generation failed for paper id={}: {}", paper.getId(), e.getMessage(), e);
+            paper.setProcessingStatus(ProcessingStatus.FAILED);
+            paperRepository.save(paper);
+            return null;
+        }
+    }
+
+    /**
+     * Phase 5 Batch 3: generates an embedding (Ollama / nomic-embed-text) for
+     * each chunk and stores it. Only marks the paper COMPLETED if every
+     * embedding is generated and saved successfully; otherwise marks FAILED.
+     */
+    private void generateAndSaveEmbeddings(Paper paper, List<PaperChunk> chunks) {
+        try {
+            embeddingService.generateAndStoreEmbeddings(chunks);
+            paper.setProcessingStatus(ProcessingStatus.COMPLETED);
+            paperRepository.save(paper);
+            log.info("Embeddings completed for paper id={}, chunkCount={}", paper.getId(), chunks.size());
+        } catch (Exception e) {
+            log.error("Embedding generation failed for paper id={}: {}", paper.getId(), e.getMessage(), e);
             paper.setProcessingStatus(ProcessingStatus.FAILED);
             paperRepository.save(paper);
         }
@@ -175,6 +211,10 @@ public class PaperService {
             throw new FileStorageException("Failed to delete file for paper id: " + paperId, e);
         }
 
+        List<PaperChunk> chunks = paperChunkRepository.findByPaperOrderByChunkIndexAsc(paper);
+        for (PaperChunk chunk : chunks) {
+            chunkEmbeddingRepository.deleteByPaperChunk(chunk);
+        }
         paperChunkRepository.deleteByPaper(paper);
         paperRepository.delete(paper);
         log.info("Paper deleted: id={}, owner={}", paperId, owner.getEmail());
