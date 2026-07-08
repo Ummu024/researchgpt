@@ -1,13 +1,17 @@
 package com.researchgpt.service;
 
+
 import com.researchgpt.dto.PaperResponse;
 import com.researchgpt.entity.Paper;
+import com.researchgpt.entity.PaperChunk;
 import com.researchgpt.entity.ProcessingStatus;
 import com.researchgpt.entity.User;
 import com.researchgpt.exception.FileStorageException;
 import com.researchgpt.exception.InvalidFileException;
 import com.researchgpt.exception.PaperNotFoundException;
+import com.researchgpt.repository.PaperChunkRepository;
 import com.researchgpt.repository.PaperRepository;
+import com.researchgpt.util.TextChunkerUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -22,6 +26,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -34,11 +39,14 @@ public class PaperService {
     private static final String CONTENT_TYPE_PDF = "application/pdf";
 
     private final PaperRepository paperRepository;
+    private final PaperChunkRepository paperChunkRepository;
     private final Path uploadDir;
 
     public PaperService(PaperRepository paperRepository,
+                         PaperChunkRepository paperChunkRepository,
                          @Value("${app.upload.dir:uploads}") String uploadDirPath) {
         this.paperRepository = paperRepository;
+        this.paperChunkRepository = paperChunkRepository;
         this.uploadDir = Paths.get(uploadDirPath).toAbsolutePath().normalize();
         try {
             Files.createDirectories(this.uploadDir);
@@ -86,6 +94,8 @@ public class PaperService {
      * Extracts text from the stored PDF using Apache PDFBox and updates the
      * paper's processingStatus accordingly (PENDING -> PROCESSING -> COMPLETED/FAILED).
      * Runs synchronously as part of the upload request for Phase 5 Batch 1.
+     *
+     * Phase 5 Batch 2: on successful extraction, also triggers chunk generation.
      */
     private void extractTextAndUpdateStatus(Paper paper, Path filePath) {
         paper.setProcessingStatus(ProcessingStatus.PROCESSING);
@@ -105,6 +115,46 @@ public class PaperService {
         }
 
         paperRepository.save(paper);
+
+        // Phase 5 Batch 2: only attempt chunking if extraction succeeded
+        if (paper.getProcessingStatus() == ProcessingStatus.COMPLETED) {
+            generateAndSaveChunks(paper);
+        }
+    }
+
+    /**
+     * Phase 5 Batch 2: splits paper.extractedText into overlapping chunks
+     * and persists them as PaperChunk rows. On any failure (including no
+     * chunks produced), marks the paper as FAILED.
+     */
+    private void generateAndSaveChunks(Paper paper) {
+        try {
+            List<String> chunkContents = TextChunkerUtil.chunkText(paper.getExtractedText());
+
+            if (chunkContents.isEmpty()) {
+                log.warn("No chunks generated for paper id={}, no extracted text available", paper.getId());
+                paper.setProcessingStatus(ProcessingStatus.FAILED);
+                paperRepository.save(paper);
+                return;
+            }
+
+            List<PaperChunk> chunks = new ArrayList<>();
+            for (int i = 0; i < chunkContents.size(); i++) {
+                chunks.add(PaperChunk.builder()
+                        .paper(paper)
+                        .chunkIndex(i)
+                        .content(chunkContents.get(i))
+                        .build());
+            }
+
+            paperChunkRepository.saveAll(chunks);
+            log.info("Saved {} chunks for paper id={}", chunks.size(), paper.getId());
+
+        } catch (Exception e) {
+            log.error("Chunk generation failed for paper id={}: {}", paper.getId(), e.getMessage(), e);
+            paper.setProcessingStatus(ProcessingStatus.FAILED);
+            paperRepository.save(paper);
+        }
     }
 
     public List<PaperResponse> listPapers(User owner) {
@@ -125,6 +175,7 @@ public class PaperService {
             throw new FileStorageException("Failed to delete file for paper id: " + paperId, e);
         }
 
+        paperChunkRepository.deleteByPaper(paper);
         paperRepository.delete(paper);
         log.info("Paper deleted: id={}, owner={}", paperId, owner.getEmail());
     }
