@@ -30,9 +30,16 @@ spring:
   ai:
     ollama:
       base-url: http://localhost:11434
+
       embedding:
         options:
           model: nomic-embed-text
+
+      chat:
+        options:
+          model: gemma3:1b
+          temperature: 0.2
+
       init:
         pull-model-strategy: when_missing
 
@@ -42,14 +49,12 @@ server:
 logging:
   level:
     com.researchgpt: DEBUG
+    org.springframework.ai: DEBUG
 
 application:
   security:
     jwt:
-      # Base64-encoded HMAC-SHA256 key.
-      # Override via JWT_SECRET_KEY in production.
       secret-key: ${JWT_SECRET_KEY:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm}
-      # 24 hours
       expiration: ${JWT_EXPIRATION_MS:86400000}
 
 app:
