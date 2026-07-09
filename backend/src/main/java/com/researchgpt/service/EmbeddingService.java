@@ -20,18 +20,15 @@ public class EmbeddingService {
     private final ObjectMapper objectMapper;
 
     public EmbeddingService(EmbeddingModel embeddingModel,
-                             ChunkEmbeddingRepository chunkEmbeddingRepository) {
+                            ChunkEmbeddingRepository chunkEmbeddingRepository) {
         this.embeddingModel = embeddingModel;
         this.chunkEmbeddingRepository = chunkEmbeddingRepository;
         this.objectMapper = new ObjectMapper();
     }
 
     /**
-     * Generates an embedding (via Ollama / nomic-embed-text) for every chunk
-     * in the given list and persists them as ChunkEmbedding rows.
-     * <p>
-     * Throws a RuntimeException if any chunk fails to embed or serialize,
-     * so the caller (PaperService) can mark the paper as FAILED.
+     * Generates embeddings for every paper chunk and stores them
+     * as JSON strings in PostgreSQL.
      */
     public void generateAndStoreEmbeddings(List<PaperChunk> chunks) {
         List<ChunkEmbedding> embeddingsToSave = new ArrayList<>();
@@ -41,23 +38,60 @@ public class EmbeddingService {
                 float[] vector = embeddingModel.embed(chunk.getContent());
 
                 if (vector == null || vector.length == 0) {
-                    throw new IllegalStateException("Ollama returned an empty embedding for chunk id=" + chunk.getId());
+                    throw new IllegalStateException(
+                            "Ollama returned an empty embedding for chunk id=" + chunk.getId());
                 }
 
                 String embeddingJson = objectMapper.writeValueAsString(vector);
 
-                embeddingsToSave.add(ChunkEmbedding.builder()
-                        .paperChunk(chunk)
-                        .embedding(embeddingJson)
-                        .build());
+                embeddingsToSave.add(
+                        ChunkEmbedding.builder()
+                                .paperChunk(chunk)
+                                .embedding(embeddingJson)
+                                .build()
+                );
 
             } catch (Exception e) {
-                log.error("Embedding generation failed for chunk id={}: {}", chunk.getId(), e.getMessage(), e);
-                throw new RuntimeException("Embedding generation failed for chunk id=" + chunk.getId(), e);
+                log.error("Embedding generation failed for chunk id={}: {}",
+                        chunk.getId(), e.getMessage(), e);
+
+                throw new RuntimeException(
+                        "Embedding generation failed for chunk id=" + chunk.getId(), e);
             }
         }
 
         chunkEmbeddingRepository.saveAll(embeddingsToSave);
-        log.info("Saved {} embeddings for {} chunks", embeddingsToSave.size(), chunks.size());
+
+        log.info("Saved {} embeddings for {} chunks",
+                embeddingsToSave.size(),
+                chunks.size());
+    }
+
+    /**
+     * Generates an embedding for arbitrary text.
+     * Used by semantic search (Phase 5 Batch 5).
+     * The embedding is NOT stored in the database.
+     *
+     * @param text User's search question
+     * @return Embedding vector
+     */
+    public float[] embedText(String text) {
+        try {
+            float[] vector = embeddingModel.embed(text);
+
+            if (vector == null || vector.length == 0) {
+                throw new IllegalStateException(
+                        "Ollama returned an empty embedding.");
+            }
+
+            return vector;
+
+        } catch (Exception e) {
+            log.error("Embedding generation failed for query: {}",
+                    e.getMessage(), e);
+
+            throw new RuntimeException(
+                    "Failed to generate embedding for search query", e);
+        }
     }
 }

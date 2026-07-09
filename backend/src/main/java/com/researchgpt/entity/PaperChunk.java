@@ -27,7 +27,7 @@ public class PaperChunk {
     @Column(name = "chunk_index", nullable = false)
     private Integer chunkIndex;
 
-    @Lob
+    
     @Column(name = "content", nullable = false, columnDefinition = "TEXT")
     private String content;
 }

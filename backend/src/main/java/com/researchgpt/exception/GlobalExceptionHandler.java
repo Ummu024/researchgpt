@@ -69,6 +69,10 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGenericException(Exception ex) {
+
+        ex.printStackTrace();
+
+        
         ErrorResponse error = new ErrorResponse(
                 HttpStatus.INTERNAL_SERVER_ERROR.value(),
                 "Internal Server Error",
@@ -106,5 +110,25 @@ public ResponseEntity<ErrorResponse> handleFileStorage(FileStorageException ex) 
             ex.getMessage()
     );
     return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
-} 
+}
+
+@ExceptionHandler(NoPapersFoundException.class)
+public ResponseEntity<ErrorResponse> handleNoPapersFound(NoPapersFoundException ex) {
+    ErrorResponse error = new ErrorResponse(
+            HttpStatus.NOT_FOUND.value(),
+            "No Papers Found",
+            ex.getMessage()
+    );
+    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+}
+
+@ExceptionHandler(EmbeddingsMissingException.class)
+public ResponseEntity<ErrorResponse> handleEmbeddingsMissing(EmbeddingsMissingException ex) {
+    ErrorResponse error = new ErrorResponse(
+            HttpStatus.BAD_REQUEST.value(),
+            "Embeddings Missing",
+            ex.getMessage()
+    );
+    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+}
 }
